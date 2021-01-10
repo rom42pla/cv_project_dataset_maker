@@ -31,7 +31,6 @@ camera = Camera(assets_path=args.assets_path,
                 seconds_to_be_idle=args.seconds_to_be_idle, seconds_to_be_recorded=args.seconds_to_be_recorded)
 
 camera.start()
-input("Press enter to quit")
-camera.stop()
+print(f"Press ESC to quit")
 
 # c.plot_last_frames()
