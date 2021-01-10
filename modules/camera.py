@@ -20,7 +20,7 @@ class Camera:
                  n_frames: int = 30,
                  seconds_preparation: float = 5, seconds_to_be_recorded: float = 2, seconds_to_be_idle: float = 6,
                  window_size: int = 175,
-                 window_preparation_color: tuple = (255, 0, 0),
+                 window_preparation_color: tuple = (255, 255, 255),
                  window_recording_color: tuple = (0, 0, 255),
                  window_idle_color: tuple = (0, 255, 0)):
         # eventually creates output directory
@@ -121,8 +121,17 @@ class Camera:
                             fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=1)
             cv2.imshow('ASL Dataset Maker', show_frame)
 
-            if cv2.waitKey(1) == 27: #& False:
-                self.stop()
+            if cv2.waitKey(1) == ord(" "):
+                if self.states_graph.current_state == "preparation":
+                    self.states_graph.set_current_state("idle")
+                    self.state_starting_time = time.time()
+                elif self.states_graph.current_state == "idle":
+                    self.states_graph.set_current_state("preparation")
+                    self.state_starting_time = time.time()
+
+            if cv2.waitKey(1) == 27:
+                if self.states_graph.current_state in {"preparation", "idle"}:
+                    self.stop()
 
     def frame_elaboration(self, save_frame, horizontal_flip: bool = True):
         # horizontally flips the image
@@ -138,7 +147,8 @@ class Camera:
                                    (self.window_center[0] + self.window_size, self.window_center[1] + self.window_size),
                                    color=window_color, thickness=2)
 
-        upper_label = self.states_graph.current_state
+        if self.states_graph.current_state in {"preparation"}:
+            upper_label = f"press SPACE to begin"
         if self.states_graph.current_state in {"idle", "recording"}:
             # shows the new letter to mimic
             alphabet = list('abcdefghijklmnopqrstuvwxyz')
@@ -171,21 +181,21 @@ class Camera:
                 self.window_center[0] + self.window_size + 2 * letter_img.shape[1] // 2,
                 :] = letter_img
 
+            # show a progress bar
+            percentage = (time.time() - self.state_starting_time) / \
+                         self.states_graph.get_seconds(self.states_graph.current_state)
+            show_frame = cv2.rectangle(show_frame,
+                                       (self.window_center[0] - self.window_size,
+                                        self.window_center[1] - self.window_size),
+                                       (self.window_center[0] - self.window_size + int(
+                                           self.window_size * percentage * 2),
+                                        25 + self.window_size),
+                                       color=window_color, thickness=-1)
+
         cv2.putText(img=show_frame, text=upper_label,
                     org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size - 25),
                     color=window_color,
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25, thickness=1)
-
-        # show a progress bar
-        percentage = (time.time() - self.state_starting_time) / \
-                     self.states_graph.get_seconds(self.states_graph.current_state)
-        show_frame = cv2.rectangle(show_frame,
-                                   (self.window_center[0] - self.window_size,
-                                    self.window_center[1] - self.window_size),
-                                   (self.window_center[0] - self.window_size + int(
-                                       self.window_size * percentage * 2),
-                                    25 + self.window_size),
-                                   color=window_color, thickness=-1)
 
         # crops the area in the rectangle
         save_frame = save_frame[self.window_center[1] - self.window_size: self.window_center[1] + self.window_size,
