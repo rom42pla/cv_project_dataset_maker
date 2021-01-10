@@ -35,8 +35,9 @@ class Camera:
         self.states_graph.add_edge(edge_from="recording", edge_to="idle")
         self.states_graph.set_current_state("idle")
 
-        # mimed letters
+        # states' variables
         self.mimed_letters = []
+        self.state_starting_time = None
 
         # sets the resolution of the webcam
         assert isinstance(resolution, int) or isinstance(resolution, tuple) or isinstance(resolution, list)
@@ -74,7 +75,7 @@ class Camera:
         # draws a rectangle on the app
         window_color = self.window_not_recording_color if self.states_graph.current_state == "idle" \
             else self.window_recording_color
-        show_frame = cv2.rectangle(np.array(show_frame),
+        show_frame = cv2.rectangle(show_frame,
                                    (self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
                                    (self.window_center[0] + self.window_size, self.window_center[1] + self.window_size),
                                    color=window_color, thickness=2)
@@ -93,6 +94,16 @@ class Camera:
                     color=window_color,
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25, thickness=1)
 
+        # show a progress bar
+        percentage = (time.time() - self.state_starting_time) / \
+                     self.states_graph.get_seconds(self.states_graph.current_state)
+
+        show_frame = cv2.rectangle(show_frame,
+                                   (self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
+                                   (self.window_center[0] - self.window_size + int(self.window_size * percentage * 2),
+                                    25 + self.window_size),
+                                   color=(128, 128, 0), thickness=-1)
+
         # crops the area in the rectangle
         save_frame = save_frame[self.window_center[1] - self.window_size: self.window_center[1] + self.window_size,
                      self.window_center[0] - self.window_size: self.window_center[0] + self.window_size]
@@ -110,18 +121,17 @@ class Camera:
         out.release()
 
     def capture_frame(self):
-
         prev_frame_time, new_frame_time = 0, 0
-        state_starting_time = time.time()
+        self.state_starting_time = time.time()
 
         saved_frames = []
         while self.is_running:
             current_time = time.time()
             # waits for the state to change
-            if current_time >= state_starting_time + \
-                    self.states_graph.states[self.states_graph.current_state]["seconds"]:
+            if current_time >= self.state_starting_time + \
+                    self.states_graph.get_seconds(self.states_graph.current_state):
                 self.states_graph.set_current_state(self.states_graph.states[self.states_graph.current_state]["to"])
-                state_starting_time, self.states_graph.is_new_state = current_time, True
+                self.state_starting_time, self.states_graph.is_new_state = current_time, True
             else:
                 self.states_graph.is_new_state = False
 
@@ -229,8 +239,14 @@ class CameraStatesGraph:
         self.states[edge_from]["to"] = edge_to
 
     def set_current_state(self, state):
+        assert isinstance(state, str)
         assert state in self.states
         self.current_state = state
+
+    def get_seconds(self, state):
+        assert isinstance(state, str)
+        assert state in self.states
+        return self.states[state]["seconds"]
 
     def __str__(self):
         string = f"Graph:\n{pformat(self.states, indent=4)}\n"
