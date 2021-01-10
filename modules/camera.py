@@ -17,7 +17,8 @@ class Camera:
 
     def __init__(self, assets_path: str,
                  cam_number: int = 0, resolution: int = 720, show_fps: bool = True,
-                 n_frames: int = 30, seconds_to_be_recorded: float = 1,
+                 n_frames: int = 30,
+                 seconds_to_be_recorded: float = 2, seconds_to_be_idle: float = 6,
                  window_size: int = 175,
                  window_recording_color: tuple = (0, 0, 255), window_not_recording_color: tuple = (0, 255, 0)):
         # eventually creates output directory
@@ -32,17 +33,19 @@ class Camera:
         self.is_running = False
         self.vid, self.thread = cv2.VideoCapture(cam_number), None
 
+        # states' variables
+        self.mimed_letters = []
+        self.state_starting_time, self.seconds_to_be_recorded, self.seconds_to_be_idle = None, \
+                                                                                         seconds_to_be_recorded, \
+                                                                                         seconds_to_be_idle
+
         # creates the states' graph
         self.states_graph = CameraStatesGraph()
-        self.states_graph.add_state("recording", seconds=seconds_to_be_recorded)
-        self.states_graph.add_state("idle", seconds=3)
+        self.states_graph.add_state("recording", seconds=self.seconds_to_be_recorded)
+        self.states_graph.add_state("idle", seconds=self.seconds_to_be_idle)
         self.states_graph.add_edge(edge_from="idle", edge_to="recording")
         self.states_graph.add_edge(edge_from="recording", edge_to="idle")
         self.states_graph.set_current_state("idle")
-
-        # states' variables
-        self.mimed_letters = []
-        self.state_starting_time, self.seconds_to_be_recorded = None, seconds_to_be_recorded
 
         # sets the resolution of the webcam
         assert isinstance(resolution, int) or isinstance(resolution, tuple) or isinstance(resolution, list)
@@ -115,7 +118,7 @@ class Camera:
         letter_img = join(self.letters_examples, letter_img[0]) if len(letter_img) > 0 else None
         if letter_img:
             letter_img = cv2.imread(letter_img)
-            letter_img_new_dimensions = [64, (letter_img.shape[0] * 64) // letter_img.shape[1]]
+            letter_img_new_dimensions = [128, (letter_img.shape[0] * 128) // letter_img.shape[1]]
             if letter_img_new_dimensions[1] % 2 != 0: letter_img_new_dimensions[1] -= 1
             letter_img = cv2.resize(letter_img, tuple(letter_img_new_dimensions))
             show_frame[
@@ -159,7 +162,7 @@ class Camera:
             try:
                 ret, frame = self.vid.read()
                 show_frame, save_frame = self.frame_elaboration(frame,
-                                                                horizontal_flip=True)
+                                                                horizontal_flip=False)
             except Exception as exception:
                 print(exception)
                 break
