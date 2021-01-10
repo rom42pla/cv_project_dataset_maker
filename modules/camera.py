@@ -165,7 +165,7 @@ class Camera:
                 break
 
             if self.states_graph.is_new_state and self.states_graph.current_state == "idle":
-                frames_to_save = np.stack(saved_frames)[np.linspace(0, len(saved_frames), num=self.n_frames,
+                frames_to_save = np.stack(saved_frames)[np.linspace(0, len(saved_frames), num=int(self.seconds_to_be_recorded * self.n_frames),
                                                                     endpoint=False, dtype=int)]
                 self.save_video(frames_to_save)
                 saved_frames = []

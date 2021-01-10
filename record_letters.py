@@ -10,7 +10,7 @@ samples_path, letters_path = join(assets_path, "samples"), join(assets_path, "le
 parser = argparse.ArgumentParser(description='Parameters for alphabet sign recognition')
 parser.add_argument("-c", "--cam_number", type=int, default=0,
                     help='Number of the cam in use')
-parser.add_argument("-sr", "--seconds_to_be_recorded", type=float, default=1,
+parser.add_argument("-sr", "--seconds_to_be_recorded", type=float, default=2,
                     help='Seconds to be recorded')
 parser.add_argument("-fr", "--n_frames", type=int, default=30,
                     help='Frames to be recorded')
