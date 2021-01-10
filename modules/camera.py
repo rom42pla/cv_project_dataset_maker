@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 class Camera:
 
     def __init__(self, assets_path: str,
-                 cam_number: int = 0, n_frames: int = 8, resolution: int = 720, show_fps: bool = True,
+                 cam_number: int = 0, resolution: int = 720, show_fps: bool = True,
+                 n_frames: int = 30, seconds_to_be_recorded: float = 1,
                  window_size: int = 175,
                  window_recording_color: tuple = (0, 0, 255), window_not_recording_color: tuple = (0, 255, 0)):
         # eventually creates output directory
@@ -33,7 +34,7 @@ class Camera:
 
         # creates the states' graph
         self.states_graph = CameraStatesGraph()
-        self.states_graph.add_state("recording", seconds=1)
+        self.states_graph.add_state("recording", seconds=seconds_to_be_recorded)
         self.states_graph.add_state("idle", seconds=3)
         self.states_graph.add_edge(edge_from="idle", edge_to="recording")
         self.states_graph.add_edge(edge_from="recording", edge_to="idle")
@@ -41,7 +42,7 @@ class Camera:
 
         # states' variables
         self.mimed_letters = []
-        self.state_starting_time = None
+        self.state_starting_time, self.seconds_to_be_recorded = None, seconds_to_be_recorded
 
         # sets the resolution of the webcam
         assert isinstance(resolution, int) or isinstance(resolution, tuple) or isinstance(resolution, list)
@@ -94,9 +95,8 @@ class Camera:
             if next_letter_index >= len(alphabet):
                 next_letter_index = 0
             self.mimed_letters += [alphabet[next_letter_index]]
-
         cv2.putText(img=show_frame, text=f"Letter '{self.mimed_letters[-1]}'",
-                    org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
+                    org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size - 25),
                     color=window_color,
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25, thickness=1)
 
