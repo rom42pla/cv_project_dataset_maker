@@ -37,6 +37,7 @@ class Camera:
 
         # states' variables
         self.mimed_letters = []
+        self.alphabet = list('abcdefghijklmnopqrstuvwxyz')
         self.state_starting_time = None
         self.seconds_preparation, self.seconds_to_be_recorded, self.seconds_to_be_idle = seconds_preparation, \
                                                                                          seconds_to_be_recorded, \
@@ -121,7 +122,8 @@ class Camera:
                             fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=1)
             cv2.imshow('ASL Dataset Maker', show_frame)
 
-            if cv2.waitKey(1) == ord(" "):
+            pressed_key = cv2.waitKey(1)
+            if pressed_key == ord(" "):
                 if self.states_graph.current_state == "preparation":
                     self.states_graph.set_current_state("idle")
                     self.state_starting_time = time.time()
@@ -129,9 +131,37 @@ class Camera:
                     self.states_graph.set_current_state("preparation")
                     self.state_starting_time = time.time()
 
-            if cv2.waitKey(1) == 27:
+            # next letter
+            if pressed_key == ord("n"):
+                if self.states_graph.current_state in {"preparation", "idle"} and len(self.mimed_letters) > 0:
+                    self.mimed_letters += [self.get_previous_letter()]
+                    self.state_starting_time = time.time()
+                    if self.states_graph.current_state == "preparation":
+                        self.states_graph.set_current_state("idle")
+
+            # previous letter
+            if pressed_key == ord("m"):
+                if self.states_graph.current_state in {"preparation", "idle"} and len(self.mimed_letters) > 0:
+                    self.mimed_letters += [self.get_next_letter()]
+                    self.state_starting_time = time.time()
+                    if self.states_graph.current_state == "preparation":
+                        self.states_graph.set_current_state("idle")
+
+            if pressed_key == 27:
                 if self.states_graph.current_state in {"preparation", "idle"}:
                     self.stop()
+
+    def get_previous_letter(self):
+        previous_letter_index = self.alphabet.index(self.mimed_letters[-1]) - 1
+        if previous_letter_index < 0:
+            previous_letter_index = -1
+        return self.alphabet[previous_letter_index]
+
+    def get_next_letter(self):
+        next_letter_index = self.alphabet.index(self.mimed_letters[-1]) + 1
+        if next_letter_index >= len(self.alphabet):
+            next_letter_index = 0
+        return self.alphabet[next_letter_index]
 
     def frame_elaboration(self, save_frame, horizontal_flip: bool = True):
         # horizontally flips the image
@@ -147,18 +177,13 @@ class Camera:
                                    (self.window_center[0] + self.window_size, self.window_center[1] + self.window_size),
                                    color=window_color, thickness=2)
 
-        if self.states_graph.current_state in {"preparation"}:
-            upper_label = f"press SPACE to begin"
+        upper_label = f""
         if self.states_graph.current_state in {"idle", "recording"}:
             # shows the new letter to mimic
-            alphabet = list('abcdefghijklmnopqrstuvwxyz')
             if len(self.mimed_letters) == 0:
                 self.mimed_letters += ["a"]
             elif self.states_graph.is_new_state and self.states_graph.current_state == "idle":
-                next_letter_index = alphabet.index(self.mimed_letters[-1]) + 1
-                if next_letter_index >= len(alphabet):
-                    next_letter_index = 0
-                self.mimed_letters += [alphabet[next_letter_index]]
+                self.mimed_letters += [self.get_next_letter()]
 
             if self.states_graph.current_state == "idle":
                 upper_label = f"prepare letter '{self.mimed_letters[-1]}'"
@@ -192,10 +217,23 @@ class Camera:
                                         25 + self.window_size),
                                        color=window_color, thickness=-1)
 
+        # upper label
         cv2.putText(img=show_frame, text=upper_label,
-                    org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size - 25),
+                    org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size - 20),
                     color=window_color,
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25, thickness=1)
+
+        # commands label
+        cv2.putText(img=show_frame, text=f"ESC - quit    SPACE - pause/resume    n/m - previous/next letter",
+                    org=(0 + 20, self.resolution[1] - 20),
+                    color=self.states_graph.get_window_color("preparation"),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, thickness=1)
+
+        # state label
+        cv2.putText(img=show_frame, text=self.states_graph.current_state,
+                    org=(self.window_center[0] - self.window_size + 5, self.window_center[1] + self.window_size - 5),
+                    color=window_color,
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, thickness=1)
 
         # crops the area in the rectangle
         save_frame = save_frame[self.window_center[1] - self.window_size: self.window_center[1] + self.window_size,

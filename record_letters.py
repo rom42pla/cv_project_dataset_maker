@@ -32,5 +32,3 @@ camera = Camera(assets_path=args.assets_path,
 
 camera.start()
 print(f"Press ESC to quit")
-
-# c.plot_last_frames()
