@@ -119,8 +119,10 @@ class Camera:
             if letter_img_new_dimensions[1] % 2 != 0: letter_img_new_dimensions[1] -= 1
             letter_img = cv2.resize(letter_img, tuple(letter_img_new_dimensions))
             show_frame[
-            self.resolution[1] // 2 - letter_img.shape[0] // 2: self.resolution[1] // 2 + letter_img.shape[0] // 2,
-            self.resolution[0] // 2 - letter_img.shape[1] // 2: self.resolution[0] // 2 + letter_img.shape[1] // 2,
+            self.resolution[1] // 2 - letter_img.shape[0] // 2:
+            self.resolution[1] // 2 + letter_img.shape[0] // 2,
+            self.window_center[0] + self.window_size:
+            self.window_center[0] + self.window_size + 2 * letter_img.shape[1] // 2,
             :] = letter_img
 
         # crops the area in the rectangle
