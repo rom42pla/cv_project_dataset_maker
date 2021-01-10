@@ -1,4 +1,9 @@
+from os import makedirs
+from os.path import exists, join
+
 from itertools import product
+
+from pprint import pprint, pformat
 
 from threading import Thread
 import cv2
@@ -9,14 +14,29 @@ import matplotlib.pyplot as plt
 
 class Camera:
 
-    def __init__(self,
-                 cam_number: int = 0, n_frames: int = 30, resolution: int = 720,
-                 show_fps: bool = True,
+    def __init__(self, output_dir: str,
+                 cam_number: int = 0, n_frames: int = 8, resolution: int = 720, show_fps: bool = True,
                  window_size: int = 175,
-                 window_recording_color: tuple = (255, 0, 0), window_not_recording_color: tuple = (0, 255, 0)):
+                 window_recording_color: tuple = (0, 0, 255), window_not_recording_color: tuple = (0, 255, 0)):
+        # eventually creates output directory
+        self.output_dir = output_dir
+        if not exists(self.output_dir):
+            makedirs(self.output_dir)
+
         # sets camera's properties
         self.is_running = False
         self.vid, self.thread = cv2.VideoCapture(cam_number), None
+
+        # creates the states' graph
+        self.states_graph = CameraStatesGraph()
+        self.states_graph.add_state("recording", seconds=1)
+        self.states_graph.add_state("idle", seconds=3)
+        self.states_graph.add_edge(edge_from="idle", edge_to="recording")
+        self.states_graph.add_edge(edge_from="recording", edge_to="idle")
+        self.states_graph.set_current_state("idle")
+
+        # mimed letters
+        self.mimed_letters = []
 
         # sets the resolution of the webcam
         assert isinstance(resolution, int) or isinstance(resolution, tuple) or isinstance(resolution, list)
@@ -44,17 +64,35 @@ class Camera:
         self.n_frames, self.window_size = n_frames, window_size
         self.q_frames = np.zeros(shape=(n_frames, self.window_size * 2, self.window_size * 2, 3))
 
-    def frame_elaboration(self, save_frame):
+    def frame_elaboration(self, save_frame, horizontal_flip: bool = True):
+        # horizontally flips the image
+        if horizontal_flip:
+            save_frame = np.flip(save_frame, axis=1)
+
         show_frame = np.copy(save_frame)
 
-        # horizontally flips the image
-        show_frame = np.flip(show_frame, axis=1)
-
         # draws a rectangle on the app
+        window_color = self.window_not_recording_color if self.states_graph.current_state == "idle" \
+            else self.window_recording_color
         show_frame = cv2.rectangle(np.array(show_frame),
                                    (self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
                                    (self.window_center[0] + self.window_size, self.window_center[1] + self.window_size),
-                                   color=self.window_not_recording_color, thickness=2)
+                                   color=window_color, thickness=2)
+
+        # shows the new letter to mimic
+        alphabet = list('abcdefghijklmnopqrstuvwxyz')
+        if len(self.mimed_letters) == 0:
+            self.mimed_letters += [alphabet[np.random.randint(0, len(alphabet))]]
+        elif self.states_graph.is_new_state and self.states_graph.current_state == "idle":
+            next_letter_index = alphabet.index(self.mimed_letters[-1]) + 1
+            if next_letter_index >= len(alphabet):
+                next_letter_index = 0
+            self.mimed_letters += [alphabet[next_letter_index]]
+        cv2.putText(img=show_frame, text=f"Letter '{self.mimed_letters[-1]}'",
+                    org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
+                    color=window_color,
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25, thickness=1)
+
         # crops the area in the rectangle
         save_frame = save_frame[self.window_center[1] - self.window_size: self.window_center[1] + self.window_size,
                      self.window_center[0] - self.window_size: self.window_center[0] + self.window_size]
@@ -63,21 +101,50 @@ class Camera:
 
         return show_frame, save_frame
 
-    def capture_frame(self):
-        prev_frame_time, new_frame_time = 0, 0
+    def save_video(self, array):
+        out = cv2.VideoWriter(join(self.output_dir, f'{int(time.time())}_{self.mimed_letters[-1]}.mp4'),
+                              cv2.VideoWriter_fourcc(*'mp4v'), self.n_frames,
+                              (array.shape[2], array.shape[1]), True)
+        for f in array:
+            out.write(f)
+        out.release()
 
+    def capture_frame(self):
+
+        prev_frame_time, new_frame_time = 0, 0
+        state_starting_time = time.time()
+
+        saved_frames = []
         while self.is_running:
+            current_time = time.time()
+            # waits for the state to change
+            if current_time >= state_starting_time + \
+                    self.states_graph.states[self.states_graph.current_state]["seconds"]:
+                self.states_graph.set_current_state(self.states_graph.states[self.states_graph.current_state]["to"])
+                state_starting_time, self.states_graph.is_new_state = current_time, True
+            else:
+                self.states_graph.is_new_state = False
+
             try:
                 ret, frame = self.vid.read()
-                show_frame, save_frame = self.frame_elaboration(frame)
+                show_frame, save_frame = self.frame_elaboration(frame,
+                                                                horizontal_flip=True)
             except Exception as exception:
                 print(exception)
                 break
 
+            if self.states_graph.is_new_state and self.states_graph.current_state == "idle":
+                frames_to_save = np.stack(saved_frames)[np.linspace(0, len(saved_frames), num=self.n_frames,
+                                                                    endpoint=False, dtype=int)]
+                self.save_video(frames_to_save)
+                saved_frames = []
+
+            elif self.states_graph.current_state == "recording":
+                saved_frames += [save_frame]
             # saves the frame in memory
             # save_frame = cv2.cvtColor(save_frame, cv2.COLOR_BGR2GRAY)
-            self.q_frames[:-1] = self.q_frames[1:]
-            self.q_frames[-1] = save_frame
+            # self.q_frames[:-1] = self.q_frames[1:]
+            # self.q_frames[-1] = save_frame
 
             # eventually shows FPS on the app
             if self.show_fps:
@@ -138,3 +205,34 @@ class Camera:
             ax.imshow(self.q_frames[i_ax])  # , cmap="gray")
         # shows the plot
         plt.show()
+
+
+class CameraStatesGraph:
+
+    def __init__(self):
+        self.states = {}
+        self.current_state = None
+        self.is_new_state = True
+
+    def add_state(self, name, seconds):
+        assert isinstance(name, str)
+        assert seconds > 0
+        if name in self.states.keys():
+            return
+        self.states[name] = {
+            "to": None,
+            "seconds": seconds
+        }
+
+    def add_edge(self, edge_from, edge_to):
+        assert {edge_from, edge_to}.issubset(set(self.states.keys()))
+        self.states[edge_from]["to"] = edge_to
+
+    def set_current_state(self, state):
+        assert state in self.states
+        self.current_state = state
+
+    def __str__(self):
+        string = f"Graph:\n{pformat(self.states, indent=4)}\n"
+        string += f"Current state: {self.current_state}"
+        return string
