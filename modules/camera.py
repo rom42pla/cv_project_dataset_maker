@@ -1,5 +1,6 @@
-from os import makedirs
+from os import makedirs, listdir
 from os.path import exists, join
+import re
 
 from itertools import product
 
@@ -14,14 +15,17 @@ import matplotlib.pyplot as plt
 
 class Camera:
 
-    def __init__(self, output_dir: str,
+    def __init__(self, assets_path: str,
                  cam_number: int = 0, n_frames: int = 8, resolution: int = 720, show_fps: bool = True,
                  window_size: int = 175,
                  window_recording_color: tuple = (0, 0, 255), window_not_recording_color: tuple = (0, 255, 0)):
         # eventually creates output directory
-        self.output_dir = output_dir
-        if not exists(self.output_dir):
-            makedirs(self.output_dir)
+        self.assets_path = assets_path
+        self.samples_path, self.letters_examples = join(assets_path, "samples"), join(assets_path, "letters_examples")
+        if not exists(self.samples_path):
+            makedirs(self.samples_path)
+        if not exists(self.letters_examples):
+            makedirs(self.letters_examples)
 
         # sets camera's properties
         self.is_running = False
@@ -83,12 +87,14 @@ class Camera:
         # shows the new letter to mimic
         alphabet = list('abcdefghijklmnopqrstuvwxyz')
         if len(self.mimed_letters) == 0:
-            self.mimed_letters += [alphabet[np.random.randint(0, len(alphabet))]]
+            # self.mimed_letters += [alphabet[np.random.randint(0, len(alphabet))]]
+            self.mimed_letters += ["a"]
         elif self.states_graph.is_new_state and self.states_graph.current_state == "idle":
             next_letter_index = alphabet.index(self.mimed_letters[-1]) + 1
             if next_letter_index >= len(alphabet):
                 next_letter_index = 0
             self.mimed_letters += [alphabet[next_letter_index]]
+
         cv2.putText(img=show_frame, text=f"Letter '{self.mimed_letters[-1]}'",
                     org=(self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
                     color=window_color,
@@ -97,12 +103,25 @@ class Camera:
         # show a progress bar
         percentage = (time.time() - self.state_starting_time) / \
                      self.states_graph.get_seconds(self.states_graph.current_state)
-
         show_frame = cv2.rectangle(show_frame,
                                    (self.window_center[0] - self.window_size, self.window_center[1] - self.window_size),
                                    (self.window_center[0] - self.window_size + int(self.window_size * percentage * 2),
                                     25 + self.window_size),
-                                   color=(128, 128, 0), thickness=-1)
+                                   color=window_color, thickness=-1)
+
+        # shows an image to use as example for the next letter
+        letter_img = [img_name for img_name in listdir(self.letters_examples) if
+                      re.match(f"{self.mimed_letters[-1]}\..*", img_name)]
+        letter_img = join(self.letters_examples, letter_img[0]) if len(letter_img) > 0 else None
+        if letter_img:
+            letter_img = cv2.imread(letter_img)
+            letter_img_new_dimensions = [64, (letter_img.shape[0] * 64) // letter_img.shape[1]]
+            if letter_img_new_dimensions[1] % 2 != 0: letter_img_new_dimensions[1] -= 1
+            letter_img = cv2.resize(letter_img, tuple(letter_img_new_dimensions))
+            show_frame[
+            self.resolution[1] // 2 - letter_img.shape[0] // 2: self.resolution[1] // 2 + letter_img.shape[0] // 2,
+            self.resolution[0] // 2 - letter_img.shape[1] // 2: self.resolution[0] // 2 + letter_img.shape[1] // 2,
+            :] = letter_img
 
         # crops the area in the rectangle
         save_frame = save_frame[self.window_center[1] - self.window_size: self.window_center[1] + self.window_size,
@@ -113,7 +132,7 @@ class Camera:
         return show_frame, save_frame
 
     def save_video(self, array):
-        out = cv2.VideoWriter(join(self.output_dir, f'{int(time.time())}_{self.mimed_letters[-1]}.mp4'),
+        out = cv2.VideoWriter(join(self.samples_path, f'{int(time.time())}_{self.mimed_letters[-1]}.mp4'),
                               cv2.VideoWriter_fourcc(*'mp4v'), self.n_frames,
                               (array.shape[2], array.shape[1]), True)
         for f in array:
