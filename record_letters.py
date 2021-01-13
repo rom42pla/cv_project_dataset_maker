@@ -24,7 +24,6 @@ parser.add_argument("-a", "--assets_path", type=str, default=assets_path,
                     help='Path of the assets')
 args = parser.parse_args()
 
-# debug mode
 camera = Camera(assets_path=args.assets_path,
                 cam_number=args.cam_number, resolution=args.resolution, show_fps=args.show_fps,
                 n_frames=args.n_frames,
