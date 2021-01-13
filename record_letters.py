@@ -7,7 +7,7 @@ assets_path = join(".", "assets")
 samples_path, letters_path = join(assets_path, "samples"), join(assets_path, "letters")
 
 # parses the arguments from the console
-parser = argparse.ArgumentParser(description='Parameters for alphabet sign recognition')
+parser = argparse.ArgumentParser(description='Parameters for Alphabet Sign Recognition')
 parser.add_argument("-c", "--cam_number", type=int, default=0,
                     help='Number of the cam in use')
 parser.add_argument("-sr", "--seconds_to_be_recorded", type=float, default=2,

@@ -18,7 +18,7 @@ class Camera:
     def __init__(self, assets_path: str,
                  cam_number: int = 0, resolution: int = 720, show_fps: bool = True,
                  n_frames: int = 30,
-                 seconds_preparation: float = 5, seconds_to_be_recorded: float = 2, seconds_to_be_idle: float = 6,
+                 seconds_to_be_recorded: float = 2, seconds_to_be_idle: float = 6,
                  window_size: int = 175,
                  window_preparation_color: tuple = (255, 255, 255),
                  window_recording_color: tuple = (0, 0, 255),
@@ -39,13 +39,12 @@ class Camera:
         self.mimed_letters = []
         self.alphabet = list('abcdefghijklmnopqrstuvwxyz')
         self.state_starting_time = None
-        self.seconds_preparation, self.seconds_to_be_recorded, self.seconds_to_be_idle = seconds_preparation, \
-                                                                                         seconds_to_be_recorded, \
-                                                                                         seconds_to_be_idle
+        self.seconds_to_be_recorded, self.seconds_to_be_idle = seconds_to_be_recorded, \
+                                                               seconds_to_be_idle
 
         # creates the states' graph
         self.states_graph = CameraStatesGraph()
-        self.states_graph.add_state("preparation", seconds=self.seconds_preparation,
+        self.states_graph.add_state("preparation", seconds=None,
                                     window_color=window_preparation_color)
         self.states_graph.add_state("idle", seconds=self.seconds_to_be_idle,
                                     window_color=window_idle_color)
@@ -87,12 +86,13 @@ class Camera:
         while self.is_running:
             current_time = time.time()
             # waits for the state to change
-            if current_time >= self.state_starting_time + \
-                    self.states_graph.get_seconds(self.states_graph.current_state):
-                self.states_graph.set_current_state(self.states_graph.states[self.states_graph.current_state]["to"])
-                self.state_starting_time, self.states_graph.is_new_state = current_time, True
-            else:
-                self.states_graph.is_new_state = False
+            if self.states_graph.get_seconds(self.states_graph.current_state):
+                if current_time >= self.state_starting_time + \
+                        self.states_graph.get_seconds(self.states_graph.current_state):
+                    self.states_graph.set_current_state(self.states_graph.states[self.states_graph.current_state]["to"])
+                    self.state_starting_time, self.states_graph.is_new_state = current_time, True
+                else:
+                    self.states_graph.is_new_state = False
 
             try:
                 ret, frame = self.vid.read()
@@ -276,7 +276,6 @@ class CameraStatesGraph:
     def add_state(self, name, seconds,
                   window_color: tuple = (0, 0, 0)):
         assert isinstance(name, str)
-        assert seconds > 0
         assert [color for color in window_color if color < 256] is not []
         if name in self.states.keys():
             return
