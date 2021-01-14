@@ -37,6 +37,6 @@ fig1, ax = plt.subplots()
 ax.pie(sizes, labels=labels_unique, autopct='%1.1f%%',
        shadow=True, startangle=90)
 ax.axis('equal')
-plt.title("Labels distribution")
+plt.title(f"Labels distribution for {len(labels)} videos")
 plt.tight_layout()
 plt.show()
