@@ -1,16 +1,14 @@
-from os import makedirs, listdir
+from os import makedirs, listdir, remove
 from os.path import exists, join
 import re
+import string
 
-from itertools import product
-
-from pprint import pprint, pformat
+from pprint import pformat
 
 from threading import Thread
 import cv2
 import time
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 class Camera:
@@ -22,7 +20,8 @@ class Camera:
                  window_size: int = 175,
                  window_preparation_color: tuple = (255, 255, 255),
                  window_recording_color: tuple = (0, 0, 255),
-                 window_idle_color: tuple = (0, 255, 0)):
+                 window_idle_color: tuple = (0, 255, 0),
+                 window_name: str = 'ASL Dataset Maker'):
         # eventually creates output directory
         self.assets_path = assets_path
         self.samples_path, self.letters_examples = join(assets_path, "samples"), join(assets_path, "letters_examples")
@@ -34,10 +33,13 @@ class Camera:
         # sets camera's properties
         self.is_running = False
         self.vid, self.thread = cv2.VideoCapture(cam_number), None
+        assert isinstance(window_name, str)
+        self.window_name = window_name
 
         # states' variables
         self.mimed_letters = []
-        self.alphabet = list('abcdefghijklmnopqrstuvwxyz')
+        self.takes = [str(int(time.time()))]
+        self.alphabet = list(string.ascii_lowercase)
         self.state_starting_time = None
         self.seconds_to_be_recorded, self.seconds_to_be_idle = seconds_to_be_recorded, \
                                                                seconds_to_be_idle
@@ -120,7 +122,7 @@ class Camera:
                 cv2.putText(img=show_frame, text=f"FPS: {np.round(fps)}",
                             org=(0, 30), color=(0, 255, 0),
                             fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=1)
-            cv2.imshow('ASL Dataset Maker', show_frame)
+            cv2.imshow(self.window_name, show_frame)
 
             pressed_key = cv2.waitKey(1)
             if pressed_key == ord(" "):
@@ -131,25 +133,28 @@ class Camera:
                     self.states_graph.set_current_state("preparation")
                     self.state_starting_time = time.time()
 
-            # next letter
-            if pressed_key == ord("n"):
-                if self.states_graph.current_state in {"preparation", "idle"} and len(self.mimed_letters) > 0:
-                    self.mimed_letters += [self.get_previous_letter()]
+            # repeat previous letter
+            if pressed_key == ord("r"):
+                if self.states_graph.current_state in {"preparation", "idle"} and (
+                        len(self.mimed_letters) > 0 or len(self.takes) > 1):
+                    # removes the latest letter
+                    if len(self.mimed_letters) == 0:
+                        # removes the last take
+                        if exists(join(self.samples_path, f"take_{self.takes[-1]}")):
+                            remove(join(self.samples_path, f"take_{self.takes[-1]}"))
+                        self.takes = self.takes[:-1]
+                        latest_letter = self.alphabet[-1]
+                        self.mimed_letters = self.alphabet[:-1]
+                    else:
+                        latest_letter = self.mimed_letters[-1]
+                        self.mimed_letters = self.mimed_letters[:-1]
+                    remove(join(self.samples_path, f"take_{self.takes[-1]}", f"{latest_letter}.mp4"))
                     self.state_starting_time = time.time()
                     if self.states_graph.current_state == "preparation":
                         self.states_graph.set_current_state("idle")
 
-            # previous letter
-            if pressed_key == ord("m"):
-                if self.states_graph.current_state in {"preparation", "idle"} and len(self.mimed_letters) > 0:
-                    self.mimed_letters += [self.get_next_letter()]
-                    self.state_starting_time = time.time()
-                    if self.states_graph.current_state == "preparation":
-                        self.states_graph.set_current_state("idle")
-
-            if pressed_key == 27:
-                if self.states_graph.current_state in {"preparation", "idle"}:
-                    self.stop()
+            if pressed_key == 27 or cv2.getWindowProperty(self.window_name, cv2.WND_PROP_VISIBLE) == 0:
+                self.stop()
 
     def get_previous_letter(self):
         previous_letter_index = self.alphabet.index(self.mimed_letters[-1]) - 1
@@ -158,9 +163,12 @@ class Camera:
         return self.alphabet[previous_letter_index]
 
     def get_next_letter(self):
-        next_letter_index = self.alphabet.index(self.mimed_letters[-1]) + 1
-        if next_letter_index >= len(self.alphabet):
-            next_letter_index = 0
+        # default value
+        next_letter_index = 0
+        if len(self.mimed_letters) > 0:
+            next_letter_index = self.alphabet.index(self.mimed_letters[-1]) + 1
+            if next_letter_index >= len(self.alphabet):
+                next_letter_index = 0
         return self.alphabet[next_letter_index]
 
     def frame_elaboration(self, save_frame, horizontal_flip: bool = True):
@@ -180,19 +188,17 @@ class Camera:
         upper_label = f""
         if self.states_graph.current_state in {"idle", "recording"}:
             # shows the new letter to mimic
-            if len(self.mimed_letters) == 0:
-                self.mimed_letters += ["a"]
-            elif self.states_graph.is_new_state and self.states_graph.current_state == "idle":
+            if self.states_graph.is_new_state and self.states_graph.current_state == "idle":
                 self.mimed_letters += [self.get_next_letter()]
 
             if self.states_graph.current_state == "idle":
-                upper_label = f"prepare letter '{self.mimed_letters[-1]}'"
+                upper_label = f"prepare letter '{self.get_next_letter()}'"
             elif self.states_graph.current_state == "recording":
-                upper_label = f"recording letter '{self.mimed_letters[-1]}'"
+                upper_label = f"recording letter '{self.get_next_letter()}'"
 
             # shows an image to use as example for the next letter
             letter_img = [img_name for img_name in listdir(self.letters_examples) if
-                          re.match(f"{self.mimed_letters[-1]}\..*", img_name)]
+                          re.match(f"{self.get_next_letter()}\..*", img_name)]
             letter_img = join(self.letters_examples, letter_img[0]) if len(letter_img) > 0 else None
             if letter_img:
                 letter_img = cv2.imread(letter_img)
@@ -224,7 +230,7 @@ class Camera:
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.25, thickness=1)
 
         # commands label
-        cv2.putText(img=show_frame, text=f"ESC - quit    SPACE - pause/resume    n/m - previous/next letter",
+        cv2.putText(img=show_frame, text=f"ESC - quit    SPACE - pause/resume    r - repeat previous letter",
                     org=(0 + 20, self.resolution[1] - 20),
                     color=self.states_graph.get_window_color("preparation"),
                     fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5, thickness=1)
@@ -258,12 +264,21 @@ class Camera:
         cv2.destroyAllWindows()
 
     def save_video(self, array):
-        out = cv2.VideoWriter(join(self.samples_path, f'{int(time.time())}_{self.mimed_letters[-1]}.mp4'),
+        # eventually creates the folder
+        take_path = join(self.samples_path, f"take_{self.takes[-1]}")
+        if not (exists(take_path)):
+            makedirs(take_path)
+        # saves the video
+        out = cv2.VideoWriter(join(take_path, f"{self.mimed_letters[-1]}.mp4"),
                               cv2.VideoWriter_fourcc(*'mp4v'), self.n_frames,
                               (array.shape[2], array.shape[1]), True)
         for f in array:
             out.write(f)
         out.release()
+        # eventually reset the counters
+        if len(self.mimed_letters) > 0 and set(self.mimed_letters) == set(self.alphabet):
+            self.takes += [str(int(time.time()))]
+            self.mimed_letters = []
 
 
 class CameraStatesGraph:
