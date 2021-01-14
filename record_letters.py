@@ -30,4 +30,3 @@ camera = Camera(assets_path=args.assets_path,
                 seconds_to_be_idle=args.seconds_to_be_idle, seconds_to_be_recorded=args.seconds_to_be_recorded)
 
 camera.start()
-print(f"Press ESC to quit")
