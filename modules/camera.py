@@ -2,12 +2,11 @@ from os import makedirs, listdir, remove
 from os.path import exists, join
 import re
 import string
-
 from pprint import pformat
-
 from threading import Thread
-import cv2
 import time
+
+import cv2
 import numpy as np
 
 

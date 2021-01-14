@@ -1,7 +1,7 @@
-from modules.camera import Camera
-import time
 import argparse
 from os.path import join
+
+from modules.camera import Camera
 
 assets_path = join(".", "assets")
 samples_path, letters_path = join(assets_path, "samples"), join(assets_path, "letters")
